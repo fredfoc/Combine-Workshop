@@ -1,6 +1,81 @@
-# Combine
+# Combine (Worshop 1)
 
-En bref, Combine est un framework délivré par Apple pour faire du reactive programming
+Workshop de présentation de Combine.
+
+## En bref
+Combine est un framework délivré par Apple pour faire du reactive programming
+
+## Reactive Functional Programming
+
+### Imperative programming vs functional programming
+
+#### imperative programming
+- décrit **comment** on résoud un problème pas à pas (**how**)
+- changement/mutation d'état
+- assignations directes
+- accès concurrent (non thread safe)
+- compliqué à unit tester
+- souvent relié à l'utilisation de `class` (mutable, référence)
+- meilleure performance
+
+```swift
+import Foundation
+
+/*
+ dans le tableau suivant je veux remplacer toutes les occurences de "***" par "Pierre", retirer tous les termes qui contiennent "js", puis former une phrase avec des espaces entre les mots, un point à la fin et une majuscule
+ */
+
+let mots = ["je", "constate", "que", "***", "est", "une", "buse", "en", "js", "programmation"]
+
+extension String {
+    func capitalizingFirstLetter() -> String {
+        return prefix(1).capitalized + dropFirst()
+    }
+}
+```
+
+```swift
+//imperative
+var phrase = ""
+for mot in mots {
+    if mot.contains("js") {
+        continue
+    }
+    var newMot = mot
+    if mot == "***" {
+        newMot = "Pierre"
+    }
+    phrase += newMot + " "
+}
+phrase = String(phrase.dropLast())
+phrase = phrase.capitalizingFirstLetter()
+phrase = phrase + "."
+print(phrase)
+```
+
+#### functional programming
+- décrit **ce** qu'on va faire (approche procédurale) (**what**)
+- pas (*ou peu*) de changement d'état
+- fonctions pures
+- plus facile à unit tester
+- souvent relié à  l'utilisation de `struct`(immutable, copy)
+- moins bonne performance (le hardware actuel n'est pas optimisé pour le functional)
+- thread safe
+
+```swift
+//functional
+let phraseFunc = mots
+    .filter{ !$0.contains("js")}
+    .map{ $0 == "***" ? "Pierre" : $0}
+    .joined(separator: " ")
+    .capitalizingFirstLetter()
+    .appending(".")
+print(phraseFunc)
+```
+
+#### functional reactive programming
+mélange entre le reactive programming, programmation basée sur la réaction à des évènements et le functional programming.
+Le functional programming dans ce cadre permet d'utiliser des fonctions pures et l'immutabilité pour éviter les problème d'accès concurrents liés aux changements d'état et au multi threading.
 
 ## Les 3 clés de Combine
 - Publisher : un protocol derrière lequel on trouve des objets qui vont emettre des évènements.
@@ -80,7 +155,7 @@ _ = fail
     print("Received value", $0) // 3
 })
 ```
-- 1 : création d'un publisher (ici un `Fail` qui émet une erreur `Publisher<String, Never>`)
+- 1 : création d'un publisher (ici un `Fail` qui émet une erreur `Publisher<Any, MyError>`)
 - 2 : souscription au publisher
 - 3 : ce block ne sera jamais exécuté
 - 4 : réception d'un évènement de terminaison (ici `.failure(__lldb_expr_35.MyError.test)`)
@@ -106,7 +181,7 @@ subscription.cancel() // 3
 - 2 : le post d'une notification est réceptionné par le block `receiveValue`.
 - 3 : NotificationCenter ne s'arrète jamais, la souscription restera donc "vivante" et ne sera jamais annulée. Ici on l'annule manuellement. *Attention: le `cancel` n'active pas le block `completion` de la souscription*.
 
-**Une souscription en utilisant assign(to:on:).**
+**Une souscription en utilisant `assign(to:on:)`.**
 
 ```swift
 class SomeObject {
@@ -185,7 +260,7 @@ someStruct.post()
 ```
 Dans cet exemple, `subscription` disparaitra en même temps que `someStruct`.
 
-## Subscriber
+## Publisher
 
 ```Swift
 public protocol Publisher {
@@ -207,17 +282,141 @@ public protocol Publisher {
     /// - Parameter subscriber: The subscriber to attach to this ``Publisher``, after which it can receive values.
     func receive<S>(subscriber: S) where S : Subscriber, Self.Failure == S.Failure, Self.Output == S.Input
 }
+extension Publisher {
+
+    /// Attaches the specified subscriber to this publisher.
+    ///
+    /// Always call this function instead of ``Publisher/receive(subscriber:)``.
+    /// Adopters of ``Publisher`` must implement ``Publisher/receive(subscriber:)``. The implementation of ``Publisher/subscribe(_:)-4u8kn`` provided by ``Publisher`` calls through to ``Publisher/receive(subscriber:)``.
+    ///
+    /// - Parameter subscriber: The subscriber to attach to this publisher. After attaching, the subscriber can start to receive values.
+    public func subscribe<S>(_ subscriber: S) where S : Subscriber, Self.Failure == S.Failure, Self.Output == S.Input
+}
+```
+## Subscriber
+```swift
+public protocol Subscriber : CustomCombineIdentifierConvertible {
+
+    /// The kind of values this subscriber receives.
+    associatedtype Input
+
+    /// The kind of errors this subscriber might receive.
+    ///
+    /// Use `Never` if this `Subscriber` cannot receive errors.
+    associatedtype Failure : Error
+
+    /// Tells the subscriber that it has successfully subscribed to the publisher and may request items.
+    ///
+    /// Use the received ``Subscription`` to request items from the publisher.
+    /// - Parameter subscription: A subscription that represents the connection between publisher and subscriber.
+    func receive(subscription: Subscription)
+
+    /// Tells the subscriber that the publisher has produced an element.
+    ///
+    /// - Parameter input: The published element.
+    /// - Returns: A `Subscribers.Demand` instance indicating how many more elements the subscriber expects to receive.
+    func receive(_ input: Self.Input) -> Subscribers.Demand
+
+    /// Tells the subscriber that the publisher has completed publishing, either normally or with an error.
+    ///
+    /// - Parameter completion: A ``Subscribers/Completion`` case indicating whether publishing completed normally or with an error.
+    func receive(completion: Subscribers.Completion<Self.Failure>)
+}
+```
+## Subscription
+```swift
+public protocol Subscription : Cancellable, CustomCombineIdentifierConvertible {
+
+    /// Tells a publisher that it may send more values to the subscriber.
+    func request(_ demand: Subscribers.Demand)
+}
 ```
 
-| Plugin | README |
-| ------ | ------ |
-| Dropbox | [plugins/dropbox/README.md][PlDb] |
-| GitHub | [plugins/github/README.md][PlGh] |
-| Google Drive | [plugins/googledrive/README.md][PlGd] |
-| OneDrive | [plugins/onedrive/README.md][PlOd] |
-| Medium | [plugins/medium/README.md][PlMe] |
-| Google Analytics | [plugins/googleanalytics/README.md][PlGa] |
+## Création d'un Subscriber Custom
 
+```swift
+let publisher = (1...6).publisher // 1
+// 2
+final class IntSubscriber: Subscriber {
+    // 3
+    typealias Input = Int
+    typealias Failure = Never
+
+    // 4
+    func receive(subscription: Subscription) {
+      subscription.request(.max(3))
+    }
+
+    // 5
+    func receive(_ input: Int) -> Subscribers.Demand {
+      print("Received value", input)
+      return .none
+    }
+
+    // 6
+    func receive(completion: Subscribers.Completion<Never>) {
+      print("Received completion", completion)
+    }
+}
+
+let subscriber = IntSubscriber()
+publisher.subscribe(subscriber) // 7
+```
+- 1 : création d'un publisher (Publisher<Int, Never>)
+- 2 : création du custom subscriber (qui implémente Subscriber)
+- 3 : définition des types associés (Int en Output, Never en Failure). Ces types doivent être identiques aux types du Publisher (voir la méthode subscribe du protocol Subscriber)
+- 4 : mise en place de la souscription avec un maximium de 3 réceptions (ce nombre sera ajusté ensuite le cas échéant - ce processus permet d'éviter les phénomènes de back pressure)
+- 5 : lors de la réception d'une valeur on print la valeur et on indique qu'on ne demande pas d'ajustement de la souscription (`.none` équivalent à `.max(0)`)
+- 6 : réception d'un évènement de completion (`.finished` ou `.failure`)
+- 7 : souscription du Subscriber sur le Publisher
+
+Résultat obtenu :
+
+```
+——— Example of: Custom Subscriber ———
+Received value 1
+Received value 2
+Received value 3
+```
+
+*Remarque : On ne passe pas par la complétion parce que le Subscriber a un max de 3 réceptions et le publisher est complété après 6 émissions.*
+
+Pour modifier ce comportement, il suffit de transfomer le `.none` en `.unlimited`. On reçoit alors le résultat suivant :
+
+```
+——— Example of: Custom Subscriber ———
+Received value 1
+Received value 2
+Received value 3
+Received value 4
+Received value 5
+Received value 6
+Received completion finished
+```
+
+On aurait aussi pu utiliser `.max(1)`. Voir les déclarations ci-dessous pour plus de détail (à noter : `max(-1)` produit une fatalError...)
+
+```swift
+/// A request for as many values as the publisher can produce.
+public static let unlimited: Subscribers.Demand
+
+/// A request for no elements from the publisher.
+///
+/// This is equivalent to `Demand.max(0)`.
+public static let none: Subscribers.Demand
+
+/// Creates a demand for the given maximum number of elements.
+///
+/// The publisher is free to send fewer than the requested maximum number of elements.
+///
+/// - Parameter value: The maximum number of elements. Providing a negative value for this parameter results in a fatal error.
+@inlinable public static func max(_ value: Int) -> Subscribers.Demand
+```
+
+Fin du premier workshop.
+
+Petits exercices :
+- Créer une liste
 
 ## License
 MIT

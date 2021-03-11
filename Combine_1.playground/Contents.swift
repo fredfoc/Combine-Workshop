@@ -164,7 +164,7 @@ example(of: "Custom Subscriber") {
     // 5
     func receive(_ input: Int) -> Subscribers.Demand {
       print("Received value", input)
-      return .none
+      return .unlimited //.none
     }
     
     // 6
