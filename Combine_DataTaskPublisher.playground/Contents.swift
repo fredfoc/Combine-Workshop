@@ -1,5 +1,5 @@
-import UIKit
 import Combine
+import UIKit
 
 struct Users: Decodable {
     let data: [User]
@@ -13,7 +13,7 @@ struct User: Decodable {
 }
 
 struct DataTaskPublisherJSONDecoder: TopLevelDecoder {
-    func decode<T>(_ type: T.Type, from: (data: Data, response: URLResponse)) throws -> T where T : Decodable {
+    func decode<T>(_: T.Type, from: (data: Data, response: URLResponse)) throws -> T where T: Decodable {
         try JSONDecoder().decode(T.self, from: from.data)
     }
 }
@@ -28,6 +28,5 @@ request.httpMethod = "GET"
 let users = URLSession.shared
     .dataTaskPublisher(for: request)
     .decode(type: Users.self, decoder: DataTaskPublisherJSONDecoder())
-    .sink { print($0)}
-        receiveValue: { print($0)}
-
+    .sink { print($0) }
+receiveValue: { print($0) }
