@@ -1,64 +1,215 @@
-# Combine (Workshop 2)
+# Combine (Workshop 3)
 
-## Exemples de Publishers
+## Opérateurs
 
-### Empty
+Un opérateur est une méthode appliquée sur un publisher et qui retourne un nouveau publisher.
 
-Empty est un publisher qui ne renvoie rien d'autre qu'une completion.
+Exemple :
 ```swift
-_ = Empty<Any, Never>(completeImmediately: true)
-    .sink(
-        receiveCompletion: {
-            print("Received completion", $0)
-
-        },
-        receiveValue: { _ in }
-    )
+_ = (1 ... 6)
+    .publisher
+    .map { $0 * 2 }
+    .sink { print($0) }
 ```
 
-> ——— Example of: Empty ———
+> ——— Example of: map ———  
+> 2  
+> 4  
+> 6   
+> 8  
+> 10  
+> 12  
 
-Received completion finished
+Marble diagrams : https://rxmarbles.com/
 
-### Fail
+![diagram de map](map_marble.png)
 
-Empty est un publisher qui ne renvoie rien d'autre qu'une erreur.
+Marble diagrams est un site qui permet de comprendre les opérateurs en recative programming.
+
+### Opérateurs de transformations
+
+#### Collect
+
+Collect permet de tranformer un flux d'évènements en Array.
 ```swift
-enum MyError: Error {
-    case test
-}
-_ = Fail<Any, MyError>(error: MyError.test)
-    .sink(
-        receiveCompletion: {
-            print("Received completion", $0)
-        },
-        receiveValue: { _ in }
-    )
+var subscriptions = Set<AnyCancellable>()
+["A", "B", "C", "D", "E"].publisher
+    .collect()
+    .sink { print($0) }
+    .store(in: &subscriptions)
 ```
 
-> ——— Example of: Fail ———  
-> Received completion failure(__lldb_expr_99.(unknown context at $109b2651c).(unknown context at $109b26524).(unknown context at $109b2652c).MyError.test)
+> ——— Example of: collect ———  
+> ["A", "B", "C", "D", "E"]  
 
-
-### Just
-
-Just est un publisher qui renvoie une valeur unique et une completion. Il ne fail jamais (la signature de son type d'erreur est Never).
+Attention, si on ne précise pas de chiffre dans `collect` alors il reprend tout le flux. On peut préciser le regroupement de la manière suivante : `collect(2)`.
 ```swift
-_ = Just("Hello world!")
-    .sink(
-        receiveCompletion: {
-            print("Received completion", $0)
-        },
-        receiveValue: {
-            print("Received value", $0)
-        }
-    )
+var subscriptions = Set<AnyCancellable>()
+["A", "B", "C", "D", "E"].publisher
+    .collect(2)
+    .sink { print($0) }
+    .store(in: &subscriptions)
 ```
 
-> ——— Example of: Just ———  
-> Received value Hello world!  
+> ——— Example of: collect ———  
+> ["A", "B"]  
+> ["C", "D"]  
+> ["E"]  
+
+Si le publisher ne complete pas alors collect ne renvoie jamais rien !
+
+Exemple :
+```swift
+var subscriptions = Set<AnyCancellable>()
+let currentSubject = CurrentValueSubject<String, Never>("first")
+currentSubject
+    .collect()
+    .sink(receiveCompletion: {
+              print("Received completion", $0)
+          },
+          receiveValue: { print("Received", $0) })
+    .store(in: &subscriptions)
+currentSubject.send("second")
+currentSubject.send(completion: .finished)
+```
+
+> ——— Example of: collect on subject ———  
+> Received ["first", "second"]  
 > Received completion finished  
 
+Si on enlève la ligne `currentSubject.send(completion: .finished)` alors le subscriber ne reçoit jamais rien.
+Si le publiser envoie une erreur alors le `collect` ne renverra aucune valeur (seulement l'erreur).
+
+#### Map
+
+Map permet de transformer une valeur.
+```swift
+_ = (1 ... 6)
+    .publisher
+    .map { $0 * 2 }
+    .sink { print($0) }
+```
+Ici on multiplie chaque valeur par 2.
+
+> ——— Example of: map ———  
+> 2  
+> 4  
+> 6   
+> 8  
+> 10  
+> 12  
+
+Dans cet autre exemple, on "mappe" un nombre vers une string. On notera que `[123, 4, 56].publisher` renvoie un `Publishers.Sequence<[Int], Never>` et qu'à la sortie du map on obtient un `Publishers.Sequence<[String], Never>`. Le `map` a changé le type d'output du publisher pas son type d'erreur.
+
+```swift
+var subscriptions = Set<AnyCancellable>()
+let formatter = NumberFormatter()
+formatter.numberStyle = .spellOut
+[123, 4, 56]
+    .publisher
+    .map {
+        formatter.string(for: NSNumber(integerLiteral: $0)) ?? ""
+    }
+    .sink(receiveValue: { print($0) })
+    .store(in: &subscriptions)
+```
+
+Il existe aussi une méthode `map<T>`, qui permet de mapper des keypaths directement. C'est parfois utile quand on ne veut utiliser qu'une seule variable d'un objet (on peut aller jusqu'à un tuple de 3 : `map<T, U, V>`)
+
+Exemple :
+```swift
+struct MyObject {
+    let x: Int
+    let y: Int
+}
+let subject = PassthroughSubject<MyObject, Never>()
+subject
+    .map(\.x, \.y)
+    .sink { x, y in
+        print(x, "-", y)
+    }
+    .store(in: &subscriptions)
+subject.send(MyObject(x: 10, y:20))
+```
+Remarque : notez la nouvelle façon de pointer un keypath avec la notation `\.maVar`. Le Keypath permet de pointer une propriété d'un objet et pas sa valeur. En théorie, ici on aurait du écrire `\MyObject.x`, mais Swift sait inférer le type d'objet depuis le type du publisher.
+
+`tryMap` est un opérateur qui, comme son nom l'indique, va "tenter" de mapper une valeur et s'il échoue va renvoyer une erreur sur le publisher.
+
+Exemple :
+```swift
+enum MyError: Error {
+    case noData
+}
+func convert(_ value: String) throws -> Data {
+    guard let data = value.data(using: .utf8) else {
+        throw MyError.noData
+    }
+    return data
+}
+struct MyObject: Decodable {
+    let name: String
+}
+["{\"name\": \"Fred\"}", "4", "56"]
+    .publisher
+    .tryMap { try JSONDecoder().decode(MyObject.self, from: try convert($0)) }
+    .sink(receiveCompletion: {
+          print("Received completion", $0)
+      },
+      receiveValue: { print("Received", $0) })
+    .store(in: &subscriptions)
+```
+
+Le résultat est intéressant :
+
+> ——— Example of: tryMap ———  
+> Received MyObject(name: "Fred")  
+> Received completion failure(Swift.DecodingError.typeMismatch(Swift.Dictionary<Swift.String, Any>, Swift.DecodingError.Context(codingPath: [], debugDescription: "Expected to decode Dictionary<String, Any> but found a number instead.", underlyingError: nil)))
+
+Le second decodage échoue, `tryMap` émet une erreur, le publisher s'arrète.
+
+On trouve des `try` + `Method` pour de nombreux opérateurs en Combine (Exemple : `reduce`, `filter`, `scan`, `min`, etc).
+
+#### Flatmap
+
+Voilà un opérateur intéressant, mais toujours évident à comprendre.  
+Partons d'un exemple :  
+Imaginons que vous attendiez le résultat d'un publisher pour ensuite créer un autre publisher et que vous souhaitiez vous abonner à ce dernier publisher.  
+`Flatmap`est là pour ça. Il va "écraser" les deux publishers en un seul.
+
+```swift
+var subscriptions = Set<AnyCancellable>()
+["A", "B", "C", "D", "E"].publisher
+    .collect(2)
+    .flatMap { sequence in
+        Just(sequence.joined(separator: "-"))
+            .eraseToAnyPublisher()
+    }
+    .sink { print($0) }
+    .store(in: &subscriptions)
+```
+
+> ——— Example of: Flatmap ———  
+> A-B  
+> C-D  
+> E
+
+Evidemment, cet exemple est très simple et il aurait pu être réalisé avec un map. Nous verrons l'intérêt de `flatmap` en utilisant les DataTaskPublisher qui permettent d'effectuer des appels vers des api.
+
+L'exemple ci-dessus aurait aussi pu être réalisé comme suit :
+
+```swift
+var subscriptions = Set<AnyCancellable>()
+func join(_ sequence: [String]) -> AnyPublisher<String, Never> {
+    Just(sequence.joined(separator: "-"))
+        .eraseToAnyPublisher()
+}
+["A", "B", "C", "D", "E"].publisher
+    .collect(2)
+    .flatMap(join)
+    .sink { print($0) }
+    .store(in: &subscriptions)
+```
+Ce qui le rend encore plus élégant (à mon avis, mais c'est subjectif...)
 
 ### Future
 
