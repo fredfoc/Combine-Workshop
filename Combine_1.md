@@ -415,7 +415,8 @@ public static let none: Subscribers.Demand
 
 Fin du premier workshop.
 
-Petits exercices :
+## Petits exercices :
+
 - à partir du tableau suivant (1...7), émettre des évènements de dates allant du 5 au 12 juillet 2021, formattés au format full (Tuesday, November 16, 1937 AD)
 - supposons qu'un publisher émette les évènements suivants : "Bonjour", 10, MyObject(), MyError.badEncoding. Que pouvez-vous en dire ?
 - donnez un exemple d'abonnement à une notification de type "Login Success"

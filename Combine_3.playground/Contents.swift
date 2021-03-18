@@ -46,13 +46,15 @@ example(of: "collect on subject with Error") {
     currentSubject.send(completion: .failure(MyError.test))
 }
 
-example(of: "collect By Time Strategy") {
-    Timer.publish(every: 1, on: .main, in: .default)
-        .autoconnect()
-        .collect(.byTime(RunLoop.main, .seconds(5)))
-        .sink { print("\($0)", terminator: "\n\n") }
-        .store(in: &subscriptions)
-}
+/*
+ example(of: "collect By Time Strategy") {
+     Timer.publish(every: 1, on: .main, in: .default)
+         .autoconnect()
+         .collect(.byTime(RunLoop.main, .seconds(5)))
+         .sink { print("\($0)", terminator: "\n\n") }
+         .store(in: &subscriptions)
+ }
+ */
 
 example(of: "reduce") {
     (0 ... 10).publisher
@@ -176,11 +178,40 @@ example(of: "scan") {
 }
 
 example(of: "filter") {
-    (1...10)
+    (1 ... 10)
         .publisher
         .filter { $0 % 2 == 0 }
         .collect()
         .sink { print($0) }
+        .store(in: &subscriptions)
+}
+
+example(of: "compactMap") {
+    func testNumber(_ number: Int) -> String? {
+        number % 2 == 0 ? nil : "\(number) is odd"
+    }
+    (1 ... 10)
+        .publisher
+        .compactMap { testNumber($0) }
+        .collect()
+        .sink { print($0) }
+        .store(in: &subscriptions)
+}
+
+example(of: "removeDuplicate(by:)") {
+    [0, 1, 3, 2, 3, 3, 5, 4, 4, 4, 4, 0]
+        .publisher
+        .removeDuplicates(by: { $0 > $1 })
+        .sink { print("\($0)", terminator: " ") }
+        .store(in: &subscriptions)
+}
+
+example(of: "replaceError") {
+    struct MyError: Error {}
+    Fail<Int, MyError>(error: MyError())
+        .replaceError(with: 0)
+        .sink { print($0) }
+    receiveValue: { print($0) }
         .store(in: &subscriptions)
 }
 
@@ -189,29 +220,5 @@ example(of: "replaceEmpty") {
         .replaceEmpty(with: 100)
         .sink { print($0) }
     receiveValue: { print($0) }
-        .store(in: &subscriptions)
-}
-
-
-example(of: "Flatmap") {
-    ["A", "B", "C", "D", "E"].publisher
-        .collect(2)
-        .flatMap { sequence in
-            Just(sequence.joined(separator: "-"))
-                .eraseToAnyPublisher()
-        }
-        .sink { print($0) }
-        .store(in: &subscriptions)
-}
-
-example(of: "Flatmap with func") {
-    func join(_ sequence: [String]) -> AnyPublisher<String, Never> {
-        Just(sequence.joined(separator: "-"))
-            .eraseToAnyPublisher()
-    }
-    ["A", "B", "C", "D", "E"].publisher
-        .collect(2)
-        .flatMap(join)
-        .sink { print($0) }
         .store(in: &subscriptions)
 }

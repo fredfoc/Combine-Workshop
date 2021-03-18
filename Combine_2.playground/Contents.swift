@@ -64,6 +64,7 @@ example(of: "Future") {
 }
 
 example(of: "More on Future") {
+    Never
     let future = Future<Int, Never> { promise in
         print("start future at:", CFAbsoluteTimeGetCurrent())
         DispatchQueue.global().asyncAfter(deadline: .now() + 3) {

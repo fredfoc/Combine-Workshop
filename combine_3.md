@@ -28,13 +28,13 @@ Remarque : tous les example suivants fonctionnent avec
 var subscriptions = Set<AnyCancellable>()
 ```
 
-![diagram de map](map_marble.png)
+![diagram de map](assets/map_marble.png)
 
 Marble diagrams est un site qui permet de comprendre les opérateurs en recative programming.
 
 ### Opérateurs de réduction
 
-#### Collect
+#### Collect()
 
 Collect permet de tranformer un flux d'évènements en Array.
 ```swift
@@ -112,7 +112,7 @@ L'opérateur `reduce` permet de cumuler la valeur d'un évènement avec celle de
 > ——— Example of: reduce ———  
 > 55
 
-#### ignoreOutput
+#### ignoreOutput()
 
 L'opérateur `ignoreOutput` permet de ne retourner que la completion (ou une erreur) en provenance d'un publisher en ignorant les valeurs éventuellement envoyées.
 
@@ -254,7 +254,7 @@ L'opérateur `scan` permet de cumuler la valeur d'un évènement avec celle de l
 
 Notez l'utilisation de `collect()` pour récupérer tout sur une seule ligne :-).
 
-#### replaceNil
+#### replaceNil(with:)
 
 `replaceNil(with:)` permet de remplacer nil dans un publisher par la valeur de votre choix (identique au type d'output de votre publisher. Exemple : `Publisher<String?, Never>` => le remplacement se fera avec une `String`)
 
@@ -270,7 +270,7 @@ Notez l'utilisation de `collect()` pour récupérer tout sur une seule ligne :-)
 > Optional("-")  
 > Optional("C")
 
-#### mapError
+#### mapError(_:)
 
 `mapError(_:)` : remplace le type d'erreur d'un publisher par un autre type d'erreur de votre choix.
 
@@ -299,14 +299,14 @@ struct MyObject: Decodable {
     .store(in: &subscriptions)
 ```
 
-#### setFailureType
+#### setFailureType(to:)
 
 `setFailureType(to:)` : remplace le type d'erreur d'un publisher dont le type d'erreur est `Never` par un autre type d'erreur de votre choix.  
 Très intéressant quand vous devez combiner des publishers ayant des types d'erreurs différents par exemple, ou lorsque votre publisher non failable n'est pas compliant avec la signature d'une méthode imposée par un protocol (exemple : transformation d'un `Just`).
 
 ### Opérateurs de filtrage
 
-#### filter
+#### filter(_:)
 
 `filter(_:)` permet de filtrer le résultat d'un publisher.
 
@@ -322,7 +322,60 @@ Très intéressant quand vous devez combiner des publishers ayant des types d'er
 > ——— Example of: filter ———  
 > [2, 4, 6, 8, 10]
 
-#### replaceEmpty
+#### compactMap(_:)
+
+`compactMap(_:)` permet de mapper vers un nouvel élément et de ne retourner que les éléments dont le résultat est non nil.
+
+```swift
+func testNumber(_ number: Int) -> String? {
+    number % 2 == 0 ? nil : "\(number) is odd"
+}
+(1...10)
+    .publisher
+    .compactMap {testNumber($0)}
+    .collect()
+    .sink { print($0) }
+    .store(in: &subscriptions)
+```
+
+> ——— Example of: compactMap ———  
+> ["1 is odd", "3 is odd", "5 is odd", "7 is odd", "9 is odd"]
+
+#### removeDuplicates()
+
+`removeDuplicates()` permet de retirer les éléments dupliqués sur base de l'élément précédent (voir exemple pour mieux comprendre).
+
+```swift
+[0, 1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 0]
+    .publisher
+    .removeDuplicates()
+    .sink { print("\($0)", terminator: " ") }
+    .store(in: &subscriptions)
+```
+
+> ——— Example of: removeDuplicate ———  
+> 0 1 2 3 4 0
+
+Ici, la répétition des 2, 3 et 4 a été enlevée mais le dernier 0 est toujours présent puisqu'il est précédé par un 4.
+
+#### removeDuplicates(by:)
+
+`removeDuplicates(by:)` permet de retirer les éléments dupliqués sur base d'une closure renvoyant un booléen (voir exemple pour mieux comprendre).
+
+```swift
+[0, 1, 3, 2, 3, 3, 5, 4, 4, 4, 4, 0]
+    .publisher
+    .removeDuplicates(by: { $0 > $1 })
+    .sink { print("\($0)", terminator: " ") }
+    .store(in: &subscriptions)
+```
+
+> ——— Example of: removeDuplicate(by:) ———  
+> 0 1 3 3 3 5 
+
+Ici, on considère comme dupliqués tous les éléments qui sont plus petits strictement que l'élément précedent. On retire donc 2 puisque 3 est plus grand que 2, puis tous les éléments à partir du 5 car ils sont tous plus petits strictement que 5.
+
+#### replaceEmpty(with:)
   
 Si un publisher se termine sans produire de valeur, vous pouvez remplacer cet "oubli" en utilisant `replaceEmpty(with:)`.
 
@@ -343,52 +396,34 @@ avec `.replaceEmpty(with: 100)`
 > 100  
 > finished
 
-### Opérateurs de republication par souscription à un nouveau Publisher
-
-#### Flatmap
-
-Voilà un opérateur intéressant, mais toujours évident à comprendre.  
-Partons d'un exemple :  
-Imaginons que vous attendiez le résultat d'un publisher pour ensuite créer un autre publisher et que vous souhaitiez vous abonner à ce dernier publisher.  
-`flatmap` est là pour ça. Il va "écraser" les deux publishers en un seul.
+#### replaceError(with:)
+  
+Si un publisher se termine par une erreur, vous pouvez remplacer cette erreur par une completion normale en utilisant `replaceError(with:)`.
 
 ```swift
-["A", "B", "C", "D", "E"].publisher
-    .collect(2)
-    .flatMap { sequence in
-        Just(sequence.joined(separator: "-"))
-            .eraseToAnyPublisher()
-    }
+struct MyError: Error {}
+Fail<Int, MyError>(error: MyError())
+    .replaceError(with: 0)
     .sink { print($0) }
+receiveValue: { print($0) }
     .store(in: &subscriptions)
 ```
 
-> ——— Example of: Flatmap ———  
-> A-B  
-> C-D  
-> E
+sans `replaceError(with: 0)`
+> ——— Example of: replaceError ———  
+> failure(__lldb_expr_25.(unknown context at $108c7201c).(unknown context at $108c721a0).(unknown context at $108c721a8).MyError())
 
-Evidemment, cet exemple est très simple et il aurait pu être réalisé avec un map. Nous verrons l'intérêt de `flatmap` en utilisant les DataTaskPublisher qui permettent d'effectuer des appels vers des api.
+avec `replaceError(with: 0)`
+> ——— Example of: replaceError ———  
+> 0  
+> finished
 
-L'exemple ci-dessus aurait aussi pu être écrit comme suit :
+## Exercices :
 
-```swift
-func join(_ sequence: [String]) -> AnyPublisher<String, Never> {
-    Just(sequence.joined(separator: "-"))
-        .eraseToAnyPublisher()
-}
-["A", "B", "C", "D", "E"].publisher
-    .collect(2)
-    .flatMap(join)
-    .sink { print($0) }
-    .store(in: &subscriptions)
-```
-Ce qui le rend encore plus élégant (à mon avis, mais c'est subjectif...)
-Exercices :
-- créer un distributeur de bonbons (un objet qui renvoie un bonbon lorsqu'on lui demande) avec un suivi parental (les parents sont avertis quand le distributeur a donné plus de x bonbons)
-- créer un module qui permet d'avertir des gestionnaires en cas de dépassement bancaire
-- créer un module qui permet d'appeler une api de manière asynchrone et de retourner le résultat de l'api (et de se compléter) ou une erreur
-- utiliser le module précédent et permettre d'y injecter une api mockée qui renvoie une erreur ou juste résultat immédiatement.
+- renvoyer une phrase constituée de différents mots récoltés depuis un CurrentSubject
+- dans un tableau de mots, retirer tous les mots qui ont moins de 3 lettres
+- dans un tableau de nombres, remplacer tous les nombres négatifs par leur valeur absolue et cumuler cette valeur absolue avec la valeur précédente
+- vous recevez les valeurs de la bourse, établir un flux qui vous dit si la valeur a augmenté ou diminué
 
 ## License
 MIT

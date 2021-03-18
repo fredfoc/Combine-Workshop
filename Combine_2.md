@@ -349,7 +349,8 @@ struct MyObject {
 ```
 `myObject.publisher.send("something")` ne marchera pas (erreur de compilation : `Value of type 'AnyPublisher<String, Error>' has no member 'send'`).
 
-Exercices :
+## Exercices :
+
 - créer un distributeur de bonbons (un objet qui renvoie un bonbon lorsqu'on lui demande) avec un suivi parental (les parents sont avertis quand le distributeur a donné plus de x bonbons)
 - créer un module qui permet d'avertir des gestionnaires en cas de dépassement bancaire
 - créer un module qui permet d'appeler une api de manière asynchrone et de retourner le résultat de l'api (et de se compléter) ou une erreur
