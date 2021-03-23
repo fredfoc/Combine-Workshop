@@ -45,7 +45,178 @@ example(of: "Just") {
         )
 }
 
+example(of: "Deferred") {
+    _ = Deferred<Just>(createPublisher: {
+        Just("Hello")
+    })
+        .sink(
+            receiveCompletion: {
+                print("Received completion", $0)
+            },
+            receiveValue: {
+                print("Received value", $0)
+            }
+        )
+}
+
+example(of: "Record") {
+    _ = Record<String, Never> { example in
+        example.receive("One")
+        example.receive("Two")
+        example.receive("Three")
+        example.receive(completion: .finished)
+    }
+    .sink(
+        receiveCompletion: {
+            print("Received completion", $0)
+        },
+        receiveValue: {
+            print("Received value", $0)
+        }
+    )
+}
+
 var store = Set<AnyCancellable>()
+
+example(of: "ConnectablePublisher") {
+//    let publisher = Just("test")
+//        .makeConnectable()
+//
+//    print("subscription", CFAbsoluteTimeGetCurrent())
+//    publisher.sink(
+//        receiveCompletion: {
+//            print("Received completion", $0, CFAbsoluteTimeGetCurrent())
+//        },
+//        receiveValue: {
+//            print("Received value from first subscriber", $0)
+//        }
+//    ).store(in: &store)
+//
+//    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+//        _ = publisher.connect()
+//    }
+}
+
+example(of: "Multicast") {
+    var sourceValue = 0
+    var sinkValues = [Int]()
+    func sourceGenerator() -> Int {
+        sourceValue += 1
+        return sourceValue
+    }
+    enum TestFailureCondition: Error {
+        case anErrorExample
+    }
+    func asyncAPICall(sabotage: Bool, completion completionBlock: @escaping ((Int, Error?) -> Void)) {
+        DispatchQueue.global(qos: .background).async {
+            let delay = Int.random(in: 1 ... 3)
+            print(" * making async call (delay of \(delay) seconds)")
+            sleep(UInt32(delay))
+            if sabotage {
+                completionBlock(0, TestFailureCondition.anErrorExample)
+            }
+            completionBlock(sourceGenerator(), nil)
+        }
+    }
+    let pipelineFork = PassthroughSubject<Int, Error>()
+    let publisher = Deferred {
+        Future<Int, Error> { promise in
+            asyncAPICall(sabotage: false) { grantedAccess, err in
+                if let err = err {
+                    promise(.failure(err))
+                } else {
+                    promise(.success(grantedAccess))
+                }
+            }
+        }
+    }
+    .multicast(subject: pipelineFork)
+    publisher
+        .sink(receiveCompletion: { completion in
+            print("1 received the completion: ", String(describing: completion), sinkValues)
+        }, receiveValue: { value in
+            print("1 received value: ", value)
+            sinkValues.append(value)
+        })
+        .store(in: &store)
+
+    publisher.sink(receiveCompletion: { completion in
+        print("2 received the completion: ", String(describing: completion), sinkValues)
+    }, receiveValue: { value in
+        print("2 received value: ", value)
+        sinkValues.append(value)
+    })
+        .store(in: &store)
+    publisher
+        .connect()
+        .store(in: &store)
+    publisher.sink(receiveCompletion: { completion in
+        print("3 received the completion: ", String(describing: completion), sinkValues)
+    }, receiveValue: { value in
+        print("3 received value: ", value)
+        sinkValues.append(value)
+    })
+        .store(in: &store)
+}
+
+example(of: "Share") {
+    var sourceValue = 0
+    var sinkValues = [Int]()
+    func sourceGenerator() -> Int {
+        sourceValue += 1
+        return sourceValue
+    }
+    enum TestFailureCondition: Error {
+        case anErrorExample
+    }
+    func asyncAPICall(sabotage: Bool, completion completionBlock: @escaping ((Int, Error?) -> Void)) {
+        DispatchQueue.global(qos: .background).async {
+            let delay = Int.random(in: 1 ... 3)
+            print(" * making async call (delay of \(delay) seconds)")
+            sleep(UInt32(delay))
+            if sabotage {
+                completionBlock(0, TestFailureCondition.anErrorExample)
+            }
+            completionBlock(sourceGenerator(), nil)
+        }
+    }
+    let publisher = Deferred {
+        Future<Int, Error> { promise in
+            asyncAPICall(sabotage: false) { grantedAccess, err in
+                if let err = err {
+                    promise(.failure(err))
+                } else {
+                    promise(.success(grantedAccess))
+                }
+            }
+        }
+    }
+    .share()
+    publisher
+        .sink(receiveCompletion: { completion in
+            print("1 received the completion: ", String(describing: completion), sinkValues)
+        }, receiveValue: { value in
+            print("1 received value: ", value)
+            sinkValues.append(value)
+        })
+        .store(in: &store)
+
+    publisher.sink(receiveCompletion: { completion in
+        print("2 received the completion: ", String(describing: completion), sinkValues)
+    }, receiveValue: { value in
+        print("2 received value: ", value)
+        sinkValues.append(value)
+    })
+        .store(in: &store)
+    publisher.sink(receiveCompletion: { completion in
+        print("3 received the completion: ", String(describing: completion), sinkValues)
+    }, receiveValue: { value in
+        print("3 received value: ", value)
+        sinkValues.append(value)
+    })
+        .store(in: &store)
+}
+
 example(of: "Future") {
     print(CFAbsoluteTimeGetCurrent())
     Future<Int, Never> { promise in
@@ -64,7 +235,6 @@ example(of: "Future") {
 }
 
 example(of: "More on Future") {
-    Never
     let future = Future<Int, Never> { promise in
         print("start future at:", CFAbsoluteTimeGetCurrent())
         DispatchQueue.global().asyncAfter(deadline: .now() + 3) {

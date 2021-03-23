@@ -44,6 +44,35 @@ pub1.send(13)
 > Result: 36.  
 > Result: 156.
 
+Si l'un des streams échoue alors `combineLatest` échoue lui aussi.
+
+#### merge(with:_:)
+
+![diagram de combineLatest](assets/merge_marble.png)
+`merge(with:_:)` prend les évènements de streams multiples de même type et les renvoie sous forme d'un seul stream qui réagit à chaque évènements des streams d'origine.
+
+```swift
+let pubA = PassthroughSubject<Int, Never>()
+let pubB = PassthroughSubject<Int, Never>()
+let pubC = PassthroughSubject<Int, Never>()
+
+pubA
+    .merge(with: pubB, pubC)
+    .sink { print("\($0)", terminator: " ") }
+    .store(in: &subscriptions)
+
+pubA.send(1)
+pubB.send(40)
+pubC.send(90)
+pubA.send(2)
+pubB.send(50)
+pubC.send(100)
+```
+
+> ——— Example of: merge ———  
+> 1 40 90 2 50 100 
+
+Si l'un des streams échoue alors `merge` échoue lui aussi.
 
 ### Opérateurs de republication par souscription à un nouveau Publisher
 

@@ -59,7 +59,6 @@ _ = Just("Hello world!")
 > Received value Hello world!  
 > Received completion finished  
 
-
 ### Future
 
 Future est un publisher qui renvoie une valeur unique (comme Just) et une completion mais de manière asynchrone. Contrairement à Just, il peut failer.
@@ -169,6 +168,316 @@ Le résultat obtenu est le suivant :
 > Received completion from second Subscriber finished  
 
 Le second subscriber est créé après la completion du `dispatch` du `Future`. On constate alors que la valeur est envoyée immédiatement au second subscriber (alors que le premier subscriber a reçu une valeur après 3 secondes). C'est normal, le `Future`a déjà généré ses évènements et il les rejoue immédiatement pour toutes nouvelles souscriptions.
+
+### Deferred
+
+`Deferred` est un publisher qui renvoie un autre publisher fourni par une closure. Le publisher est renvoyé lors de la souscription. `Deferred` est intéressant lorsque l'on souhaite générer un publisher qui pourrait être important en terme de charge mémoire ou qui s'éxécute sans souscription (comme un `Future` pas example).
+
+```swift
+_ = Deferred<Just>(createPublisher: {
+    Just("Hello")
+})
+    .sink(
+        receiveCompletion: {
+            print("Received completion", $0)
+        },
+        receiveValue: {
+            print("Received value", $0)
+        }
+    )
+```
+
+> ——— Example of: Deferred ———  
+> Received value Hello  
+> Received completion finished  
+
+### Record
+
+`Record` permet de pré-enregistrer des valeurs d'un publisher via une completion. Les valeurs sont renvoyées lors de la souscription.
+
+```swift
+_ = Record<String, Never> { example in
+    example.receive("One")
+    example.receive("Two")
+    example.receive("Three")
+    example.receive(completion: .finished)
+}
+.sink(
+    receiveCompletion: {
+        print("Received completion", $0)
+    },
+    receiveValue: {
+        print("Received value", $0)
+    }
+)
+```
+
+> ——— Example of: Record ———  
+> Received value One  
+> Received value Two  
+> Received value Three  
+> Received completion finished
+
+### ConnectablePublisher
+
+`ConnectablePublisher` est un protocol qui définit comment rendre des publishers "impératifs". Imaginons l'example suivant :
+
+Un publisher émet un évènement avec une valeur, puis une completion et ne rejoue que le dernier évènement produit. Un premier subscriber récupère donc la valeur puis la completion. Toutefois un second subscriber ne récupèrera que la completion (la valeur n'est pas rejouée par le publisher). Pour éviter cela, on ajoute une méthode `makeConnectable()` sur le publisher afin que le publisher ne recoive la souscription que lorsque la connection `connect()` sera appelée.
+
+`makeConnectable()` ne fonctionne que si le `Failure` est à `Never`.
+
+Example :
+
+```swift
+let publisher = Just("test")
+    .makeConnectable()
+
+print("subscription", CFAbsoluteTimeGetCurrent())
+publisher.sink(
+    receiveCompletion: {
+        print("Received completion", $0, CFAbsoluteTimeGetCurrent())
+    },
+    receiveValue: {
+        print("Received value", $0)
+    }
+).store(in: &store)
+
+DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+    _ = publisher.connect()
+}
+```
+
+> ——— Example of: ConnectablePublisher ———  
+> subscription 638097031.4036  
+> Received value test  
+> Received completion finished 638097032.468913
+
+On constate que l'on reçoit la valeur une seconde après la souscription. Le comportement normal de `Just` est de renvoyer immédiatement. C'est très utile avec les DataTaskPublisher qui ne conservent pas la réception des data d'un webservice par exemple.
+
+Timer et Multicast sont des exemples de ConnectablePublisher.
+
+Si vous n'avez pas besoin de `connect()` il existe une version avec `autoconnect()`. Exemple :
+
+```swift
+let cancellable = Timer.publish(every: 1, on: .main, in: .default)
+    .autoconnect()
+    .sink() { date in
+        print ("Date now: \(date)")
+     }
+```
+
+### Multicast
+
+`Multicast` permet de piper un publisher vers un publisher unique pour les futurs subscribers.
+
+Exemple :
+```swift
+var sourceValue = 0
+var sinkValues = [Int]()
+func sourceGenerator() -> Int {
+    sourceValue += 1
+    return sourceValue
+}
+enum TestFailureCondition: Error {
+    case anErrorExample
+}
+func asyncAPICall(sabotage: Bool, completion completionBlock: @escaping ((Int, Error?) -> Void)) {
+    DispatchQueue.global(qos: .background).async {
+        let delay = Int.random(in: 1 ... 3)
+        print(" * making async call (delay of \(delay) seconds)")
+        sleep(UInt32(delay))
+        if sabotage {
+            completionBlock(0, TestFailureCondition.anErrorExample)
+        }
+        completionBlock(sourceGenerator(), nil)
+    }
+}
+let pipelineFork = PassthroughSubject<Int, Error>()
+let publisher = Deferred {
+    Future<Int, Error> { promise in
+        asyncAPICall(sabotage: false) { grantedAccess, err in
+            if let err = err {
+                promise(.failure(err))
+            } else {
+                promise(.success(grantedAccess))
+            }
+        }
+    }
+}
+publisher
+    .sink(receiveCompletion: { completion in
+        print("1 received the completion: ", String(describing: completion), sinkValues)
+    }, receiveValue: { value in
+        print("1 received value: ", value)
+        sinkValues.append(value)
+    })
+    .store(in: &store)
+publisher.sink(receiveCompletion: { completion in
+    print("2 received the completion: ", String(describing: completion), sinkValues)
+}, receiveValue: { value in
+    print("2 received value: ", value)
+    sinkValues.append(value)
+})
+    .store(in: &store)
+publisher.sink(receiveCompletion: { completion in
+    print("3 received the completion: ", String(describing: completion), sinkValues)
+}, receiveValue: { value in
+    print("3 received value: ", value)
+    sinkValues.append(value)
+})
+    .store(in: &store)
+```
+
+> ——— Example of: No Multicast ———  
+>  * making async call (delay of 3 seconds)  
+>  * making async call (delay of 2 seconds)  
+>  * making async call (delay of 2 seconds)  
+>  2 received value:  2  
+>  3 received value:  2  
+>  3 received the completion:  finished [2, 2]  
+>  2 received the completion:  finished [2, 2]  
+>  1 received value:  3  
+>  1 received the completion:  finished [2, 2, 3]
+
+```swift
+var sourceValue = 0
+var sinkValues = [Int]()
+func sourceGenerator() -> Int {
+    sourceValue += 1
+    return sourceValue
+}
+enum TestFailureCondition: Error {
+    case anErrorExample
+}
+func asyncAPICall(sabotage: Bool, completion completionBlock: @escaping ((Int, Error?) -> Void)) {
+    DispatchQueue.global(qos: .background).async {
+        let delay = Int.random(in: 1 ... 3)
+        print(" * making async call (delay of \(delay) seconds)")
+        sleep(UInt32(delay))
+        if sabotage {
+            completionBlock(0, TestFailureCondition.anErrorExample)
+        }
+        completionBlock(sourceGenerator(), nil)
+    }
+}
+let pipelineFork = PassthroughSubject<Int, Error>()
+let publisher = Deferred {
+    Future<Int, Error> { promise in
+        asyncAPICall(sabotage: false) { grantedAccess, err in
+            if let err = err {
+                promise(.failure(err))
+            } else {
+                promise(.success(grantedAccess))
+            }
+        }
+    }
+}
+.multicast(subject: pipelineFork)
+publisher
+    .sink(receiveCompletion: { completion in
+        print("1 received the completion: ", String(describing: completion), sinkValues)
+    }, receiveValue: { value in
+        print("1 received value: ", value)
+        sinkValues.append(value)
+    })
+    .store(in: &store)
+publisher.sink(receiveCompletion: { completion in
+    print("2 received the completion: ", String(describing: completion), sinkValues)
+}, receiveValue: { value in
+    print("2 received value: ", value)
+    sinkValues.append(value)
+})
+    .store(in: &store)
+publisher
+    .connect()
+    .store(in: &store)
+publisher.sink(receiveCompletion: { completion in
+    print("3 received the completion: ", String(describing: completion), sinkValues)
+}, receiveValue: { value in
+    print("3 received value: ", value)
+    sinkValues.append(value)
+})
+    .store(in: &store)
+```
+
+> ——— Example of: Multicast ———  
+> * making async call (delay of 1 seconds)  
+> 2 received value:  1  
+> 3 received value:  1  
+> 1 received value:  1  
+> 2 received the completion:  finished [1, 1, 1]  
+> 3 received the completion:  finished [1, 1, 1]  
+> 1 received the completion:  finished [1, 1, 1]
+
+### Share
+
+`Share` permet d'encapsuler un publisher pour qu'il n'envoie qu'un seul receive (c'est une forme de multicast mais sans définir le publisher final).
+
+Exemple :
+```swift
+var sourceValue = 0
+var sinkValues = [Int]()
+func sourceGenerator() -> Int {
+    sourceValue += 1
+    return sourceValue
+}
+enum TestFailureCondition: Error {
+    case anErrorExample
+}
+func asyncAPICall(sabotage: Bool, completion completionBlock: @escaping ((Int, Error?) -> Void)) {
+    DispatchQueue.global(qos: .background).async {
+        let delay = Int.random(in: 1 ... 3)
+        print(" * making async call (delay of \(delay) seconds)")
+        sleep(UInt32(delay))
+        if sabotage {
+            completionBlock(0, TestFailureCondition.anErrorExample)
+        }
+        completionBlock(sourceGenerator(), nil)
+    }
+}
+let publisher = Deferred {
+    Future<Int, Error> { promise in
+        asyncAPICall(sabotage: false) { grantedAccess, err in
+            if let err = err {
+                promise(.failure(err))
+            } else {
+                promise(.success(grantedAccess))
+            }
+        }
+    }
+}.share()
+publisher
+    .sink(receiveCompletion: { completion in
+        print("1 received the completion: ", String(describing: completion), sinkValues)
+    }, receiveValue: { value in
+        print("1 received value: ", value)
+        sinkValues.append(value)
+    })
+    .store(in: &store)
+publisher.sink(receiveCompletion: { completion in
+    print("2 received the completion: ", String(describing: completion), sinkValues)
+}, receiveValue: { value in
+    print("2 received value: ", value)
+    sinkValues.append(value)
+})
+    .store(in: &store)
+publisher.sink(receiveCompletion: { completion in
+    print("3 received the completion: ", String(describing: completion), sinkValues)
+}, receiveValue: { value in
+    print("3 received value: ", value)
+    sinkValues.append(value)
+})
+    .store(in: &store)
+```
+
+> ——— Example of: Share ———  
+> * making async call (delay of 1 seconds)  
+> 2 received value:  1  
+> 3 received value:  1  
+> 1 received value:  1  
+> 2 received the completion:  finished [1, 1, 1]  
+> 3 received the completion:  finished [1, 1, 1]  
+> 1 received the completion:  finished [1, 1, 1]
 
 ### Subject
 

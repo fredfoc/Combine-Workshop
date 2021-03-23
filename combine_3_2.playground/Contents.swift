@@ -30,6 +30,24 @@ example(of: "combineLatest") {
     pub1.send(13)
 }
 
+example(of: "merge") {
+    let pubA = PassthroughSubject<Int, Never>()
+    let pubB = PassthroughSubject<Int, Never>()
+    let pubC = PassthroughSubject<Int, Never>()
+
+    pubA
+        .merge(with: pubB, pubC)
+        .sink { print("\($0)", terminator: " ") }
+        .store(in: &subscriptions)
+
+    pubA.send(1)
+    pubB.send(40)
+    pubC.send(90)
+    pubA.send(2)
+    pubB.send(50)
+    pubC.send(100)
+}
+
 example(of: "Flatmap") {
     ["A", "B", "C", "D", "E"].publisher
         .collect(2)
