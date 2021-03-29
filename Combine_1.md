@@ -99,7 +99,7 @@ Le functional programming dans ce cadre permet d'utiliser des fonctions pures et
     _ = events
         .publisher
         .map {$0 * 10}
-        .sink { print($0)} // print(1, 2, 3, 4)
+        .sink { print($0)} // print(10, 20, 30, 40)
     ```
     Ici, `.sink { print($0)}` est un subscriber.
     *Remarque importante : un publisher n'émet rien si aucun subscriber ne lui rattaché.*
