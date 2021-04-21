@@ -33,6 +33,28 @@ example(of: "Fail") {
         )
 }
 
+var storeFuture = Set<AnyCancellable>()
+struct MyError: Error {}
+example(of: "Future") {
+    print(CFAbsoluteTimeGetCurrent())
+    Future<Int, MyError> { promise in
+        DispatchQueue.global().asyncAfter(deadline: .now() + 3) {
+//            promise(.success(1))
+            promise(.failure(MyError()))
+        }
+    }.eraseToAnyPublisher()
+        .sink(
+            receiveCompletion: {
+                print("Received completion", $0)
+                print(CFAbsoluteTimeGetCurrent())
+            },
+            receiveValue: {
+                print("Received value", $0)
+                print(CFAbsoluteTimeGetCurrent())
+            }
+        ).store(in: &storeFuture)
+}
+
 example(of: "Just") {
     _ = Just("Hello world!")
         .sink(
@@ -322,6 +344,7 @@ example(of: "Type erasure") {
     let myObject = MyObject()
     myObject
         .publisher
+        .map { $0 + "truc" }
         .sink { print("Received completion", $0) }
     receiveValue: { print("Received", $0) }
     // myObject.publisher.send("something") -> Value of type 'AnyPublisher<String, Error>' has no member 'send'

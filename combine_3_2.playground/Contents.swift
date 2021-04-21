@@ -48,6 +48,31 @@ example(of: "merge") {
     pubC.send(100)
 }
 
+example(of: "zip") {
+    let numbersPub = PassthroughSubject<Int, Never>()
+    let lettersPub = PassthroughSubject<String, Never>()
+
+    numbersPub.sink { print("numbersPub : \($0)") }
+        .store(in: &subscriptions)
+    lettersPub.sink { print("lettersPub : \($0)") }
+        .store(in: &subscriptions)
+
+    numbersPub
+        .zip(lettersPub)
+        .sink { print("zip: \($0)") }
+        .store(in: &subscriptions)
+
+    numbersPub.send(1)
+    print("----")
+    numbersPub.send(2)
+    print("----")
+    lettersPub.send("A")
+    print("----")
+    numbersPub.send(3)
+    print("----")
+    lettersPub.send("B")
+}
+
 example(of: "Flatmap") {
     ["A", "B", "C", "D", "E"].publisher
         .collect(2)
@@ -69,4 +94,42 @@ example(of: "Flatmap with func") {
         .flatMap(join)
         .sink { print($0) }
         .store(in: &subscriptions)
+}
+
+example(of: "combineLatest") {
+    let publisher1 = PassthroughSubject<Int, Never>()
+    let publisher2 = PassthroughSubject<Int, Never>()
+    let publisher3 = PassthroughSubject<Int, Never>()
+
+    let publishers = PassthroughSubject<PassthroughSubject<Int, Never>, Never>()
+
+    publishers
+        .switchToLatest()
+        .sink(receiveCompletion: { _ in print("Completed!") },
+              receiveValue: { print($0) })
+        .store(in: &subscriptions)
+
+    publishers.send(publisher1)
+    publisher1.send(1)
+    publisher1.send(2)
+
+    publishers.send(publisher2)
+    print("---- : publisher1.send(3)")
+    publisher1.send(3)
+    print("----")
+    publisher2.send(4)
+    publisher2.send(5)
+
+    publishers.send(publisher3)
+    print("---- : publisher2.send(6)")
+    publisher2.send(6)
+    print("----")
+    publisher3.send(7)
+    publisher3.send(8)
+    publisher3.send(9)
+
+    print("---- : publisher3.send(completion: .finished)")
+    publisher3.send(completion: .finished)
+    print("----")
+    publishers.send(completion: .finished)
 }

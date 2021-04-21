@@ -658,12 +658,63 @@ struct MyObject {
 ```
 `myObject.publisher.send("something")` ne marchera pas (erreur de compilation : `Value of type 'AnyPublisher<String, Error>' has no member 'send'`).
 
+### built-in publishers
+
+De nombreux éléments de Foundation disposent déjà d'un publisher pour certaines de leur propriétés. Par exemple, `Array` a un publisher qu'on peut appeler comme suit :
+```swift
+[1,2,3].publisher
+```
+`Timer`, `NotificationCenter` ou encore `URLSession` sont d'autres exemples. Il en existe de multiples.
+
+Un autre publisher intéressant est lié au KVO (Key Value Observing). On rend une variable observable comme suit :
+```swift
+class UserInfo: NSObject {
+    @objc dynamic var lastLogin: Date = Date(timeIntervalSince1970: 0)
+}
+```
+
+On pourrait "écouter" les changements en utilisant la méthode suivante :
+```swift
+observe(\.userInfo.lastLogin, options: [.new]) { object, change in
+    print ("lastLogin now \(change.newValue!).")
+}
+```
+
+Mais on peut aussi utiliser Combine en faisant ceci :
+
+```swift
+userInfo.publisher(for: \.lastLogin)
+        .sink() { date in print ("lastLogin now \(date).") }
+```
+
 ## Exercices :
 
 - créer un distributeur de bonbons (un objet qui renvoie un bonbon lorsqu'on lui demande) avec un suivi parental (les parents sont avertis quand le distributeur a donné plus de x bonbons)
 - créer un module qui permet d'avertir des gestionnaires en cas de dépassement bancaire
 - créer un module qui permet d'appeler une api de manière asynchrone et de retourner le résultat de l'api (et de se compléter) ou une erreur
 - utiliser le module précédent et permettre d'y injecter une api mockée qui renvoie une erreur ou juste résultat immédiatement.
+- transformer :
+```swift
+func performAsyncAction(completionHandler: @escaping (Int) -> Void) {
+    DispatchQueue.main.asyncAfter(deadline:.now() + 2) {
+        completionHandler(Int.random(in: 1...10))
+    }
+}
+```
+Avec un publisher de votre choix (attention de bien choisir le Publisher.
+- transformer ce code vers du code Combine :
+```swift
+var timer: Timer?
+override func viewDidLoad() {
+    super.viewDidLoad()
+    timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+        self.myDispatchQueue.async() {
+            self.myDataModel.lastUpdated = Date()
+        }
+    }
+}
+```
+Utiliser la méthode `publish` de `Timer` et n'oubliez pas `autoconnect()` afin que votre `Timer` publie automatiquement.
 
 ## License
 MIT
