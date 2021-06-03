@@ -94,26 +94,18 @@ numbersPub
     .store(in: &subscriptions)
 
 numbersPub.send(1)
-print("----")
 numbersPub.send(2)
-print("----")
 lettersPub.send("A")
-print("----")
 numbersPub.send(3)
-print("----")
 lettersPub.send("B")
 ```
 
 > ——— Example of: zip ———  
 > numbersPub : 1  
-> ----  
 > numbersPub : 2 
-> ----  
 > zip: (1, "A")  
 > lettersPub : A  
-> ----  
 > numbersPub : 3  
-> ----  
 > zip: (2, "B")  
 > lettersPub : B
 
@@ -186,40 +178,34 @@ publisher1.send(1)
 publisher1.send(2)
 
 publishers.send(publisher2)
-print("---- : publisher1.send(3)")
+print("-> publisher1.send(3)")
 publisher1.send(3)
-print("----")
 publisher2.send(4)
 publisher2.send(5)
 
 publishers.send(publisher3)
-print("---- : publisher2.send(6)")
+print("-> publisher2.send(6)")
 publisher2.send(6)
-print("----")
 publisher3.send(7)
 publisher3.send(8)
 publisher3.send(9)
 
-print("---- : publisher3.send(completion: .finished)")
+print("-> publisher3.send(completion: .finished)")
 publisher3.send(completion: .finished)
-print("----")
 publishers.send(completion: .finished)
 ```
 
 > ——— Example of: combineLatest ———  
 > 1  
 > 2  
-> ---- : publisher1.send(3)  
-> ----  
+> -> publisher1.send(3)  
 > 4  
 > 5  
-> ---- : publisher2.send(6)  
-> ----  
+> -> publisher2.send(6)  
 > 7  
 > 8  
 > 9  
-> ---- : publisher3.send(completion: .finished)  
-> ----  
+> -> publisher3.send(completion: .finished)  
 > Completed!
 
 ## Exercices :

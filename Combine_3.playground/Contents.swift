@@ -201,8 +201,11 @@ example(of: "compactMap") {
 example(of: "removeDuplicate(by:)") {
     [0, 1, 3, 2, 3, 3, 5, 4, 4, 4, 4, 0]
         .publisher
-        .removeDuplicates(by: { $0 > $1 })
-        .sink { print("\($0)", terminator: " ") }
+        .removeDuplicates(by: { x, y in
+            print(x, y, x > y)
+            return x > y
+        })
+        .sink { print("\($0)") }
         .store(in: &subscriptions)
 }
 

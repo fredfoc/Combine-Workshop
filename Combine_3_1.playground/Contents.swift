@@ -44,12 +44,22 @@ example(of: "dropFirst") {
         .store(in: &subscriptions)
 }
 
+["truc", "machin", "fuck", "bidule"]
+    .publisher
+    .prefix(while: { $0 != "fuck" })
+    .append("pas d'insulte, connard")
+    .sink { print($0) }
+receiveValue: { print($0) }
+
 example(of: "dropWhile") {
-    (1 ... 10)
+    [1, 5, 3, 2]
         .publisher
-        .drop(while: { $0 < 5 })
+        .drop(while: { value in
+            print("---", value, value < 5)
+            return value < 5
+        })
         .sink(receiveCompletion: { print($0) },
-              receiveValue: { print($0, terminator: " ") })
+              receiveValue: { print($0) })
         .store(in: &subscriptions)
 }
 

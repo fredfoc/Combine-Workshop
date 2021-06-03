@@ -81,7 +81,7 @@ currentSubject.send(completion: .finished)
 > Received completion finished  
 
 Si on enlève la ligne `currentSubject.send(completion: .finished)` alors le subscriber ne reçoit jamais rien.
-Si le publiser envoie une erreur alors le `collect` ne renverra aucune valeur (seulement l'erreur).
+Si le publisher envoie une erreur alors le `collect` ne renverra aucune valeur (seulement l'erreur).
 
 Il existe aussi une méthode `collect(_ strategy)`, qui permet de collecter les valeurs avec une stratégie sur le temps.
 
@@ -363,17 +363,32 @@ Ici, la répétition des 2, 3 et 4 a été enlevée mais le dernier 0 est toujou
 `removeDuplicates(by:)` permet de retirer les éléments dupliqués sur base d'une closure renvoyant un booléen (voir exemple pour mieux comprendre).
 
 ```swift
-[0, 1, 3, 2, 3, 3, 5, 4, 4, 4, 4, 0]
+[0, 1, 3, 2, 3, 3, 5, 4]
     .publisher
-    .removeDuplicates(by: { $0 > $1 })
-    .sink { print("\($0)", terminator: " ") }
+    .removeDuplicates(by: { x, y in
+        print(x, y, x > y)
+        return x > y
+    })
+    .sink { print("\($0)") }
     .store(in: &subscriptions)
 ```
 
 > ——— Example of: removeDuplicate(by:) ———  
-> 0 1 3 3 3 5 
+> 0  
+> 0 1 false  
+> 1  
+> 1 3 false  
+> 3  
+> 3 2 true  
+> 3 3 false  
+> 3  
+> 3 3 false  
+> 3  
+> 3 5 false  
+> 5  
+> 5 4 true
 
-Ici, on considère comme dupliqués tous les éléments qui sont plus petits strictement que l'élément précedent. On retire donc 2 puisque 3 est plus grand que 2, puis tous les éléments à partir du 5 car ils sont tous plus petits strictement que 5.
+Ici, on considère comme dupliqués tous les éléments pour lesquels la condition est true. On conserve 1 car 0 > 1 = false, on conserve 3 car 1 > 3 = false, on retire donc 2 car 3 > 2 = true, etc.
 
 #### replaceEmpty(with:)
   

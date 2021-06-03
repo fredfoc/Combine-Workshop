@@ -68,7 +68,7 @@ On voit bien que le compilateur attend une erreur de type Never qui est incompat
 
 #### allSatisfy(_:)
 
- `allSatisfy(_:)` permet de vérifier qu'un stream contient un élément donné. De la même manière que `reduce` cet opérateur attend la fin du stream pour donner une réponse. Le stream doit avoir un type de Failure égal à Never (comme `contains`.
+ `allSatisfy(_:)` permet de vérifier que tous les éléments d'un stream satisfont à la condition énoncée. De la même manière que `reduce` cet opérateur attend la fin du stream pour donner une réponse. Le stream doit avoir un type de Failure égal à Never (comme `contains`).
 
 ```swift
 [-1, 0, 10, 5]
